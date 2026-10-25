@@ -48,11 +48,14 @@ export default function LoginPage() {
         throw new Error('Backend chưa trả về access token.');
       }
 
-      // Lưu token cho phiên làm việc hiện tại.
-      sessionStorage.setItem('access_token', data.access_token);
+      // Lưu token đăng nhập.
+       sessionStorage.setItem('access_token', data.access_token);
 
-      setPassword('');
-      router.push('/');
+        // Lưu thông tin người dùng để sử dụng cho giỏ hàng.
+       sessionStorage.setItem('user', JSON.stringify(data.user));
+
+       setPassword('');
+       router.push('/');
     } catch (err) {
       if (err instanceof Error && err.message === 'Failed to fetch') {
         setError('Không thể kết nối backend. Hãy kiểm tra server.');

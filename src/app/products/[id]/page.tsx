@@ -1,9 +1,8 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-
 interface Product {
   id: number;
   name: string;
@@ -23,7 +22,7 @@ const toppings = [
   { name: 'Kem cheese', price: 10000 },
 ];
 
-export default function ProductDetailPage() {
+function ProductDetailContent() {
   const params = useParams();
   const router = useRouter();
   const id = Number(params.id);
@@ -33,6 +32,8 @@ export default function ProductDetailPage() {
   const [selectedToppings, setSelectedToppings] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [cartMessage, setCartMessage] = useState('');
+  const [addingToCart, setAddingToCart] = useState(false);
 
   useEffect(() => {
     async function loadProduct() {
@@ -75,6 +76,71 @@ export default function ProductDetailPage() {
         ? current.filter((item) => item !== name)
         : [...current, name],
     );
+  }
+
+  async function addToCart() {
+    setCartMessage('');
+  
+    const savedUser = sessionStorage.getItem('user');
+    const token = sessionStorage.getItem('access_token');
+  
+    if (!savedUser || !token) {
+      router.push('/login');
+      return;
+    }
+  
+    if (!product) {
+      setCartMessage('Không tìm thấy sản phẩm.');
+      return;
+    }
+  
+    try {
+      const user = JSON.parse(savedUser);
+  
+      if (!user.id) {
+        setCartMessage('Không xác định được tài khoản. Vui lòng đăng nhập lại.');
+        return;
+      }
+  
+      setAddingToCart(true);
+  
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  
+      const response = await fetch(`${apiUrl}/cart/items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionStorage.getItem('access_token')}`,
+        },
+        body: JSON.stringify({
+          userId: Number(user.id),
+          productId: product?.id,
+          size,
+          toppings: selectedToppings,
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(
+          typeof data.message === 'string'
+            ? data.message
+            : 'Không thể thêm sản phẩm vào giỏ hàng.',
+        );
+      }
+  
+      setCartMessage('Đã thêm sản phẩm vào giỏ hàng thành công!');
+    } catch (err) {
+      setCartMessage(
+        err instanceof Error
+          ? err.message
+          : 'Đã xảy ra lỗi khi thêm vào giỏ hàng.',
+      );
+    } finally {
+      setAddingToCart(false);
+    }
   }
 
   const selectedSize = sizes.find((item) => item.name === size);
@@ -189,28 +255,47 @@ export default function ProductDetailPage() {
           </h2>
 
           <button
-            onClick={() =>
-              alert(
-                `Sản phẩm: ${product.name}\n` +
-                `Size: ${size}\n` +
-                `Topping: ${selectedToppings.join(', ') || 'Không có'}\n` +
-                `Tổng tiền: ${totalPrice.toLocaleString('vi-VN')} đ`,
-              )
-            }
-            style={{
-              padding: 12,
-              width: '100%',
-              background: '#6f422b',
-              color: 'white',
-              border: 'none',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-          >
-            Xác nhận lựa chọn
-          </button>
+              onClick={addToCart}
+              disabled={addingToCart}
+              style={{
+                padding: 12,
+                width: '100%',
+                background: addingToCart ? '#a58b7d' : '#6f422b',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: addingToCart ? 'wait' : 'pointer',
+              }}
+            >
+              {addingToCart ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
+            </button>
+
+            {cartMessage && (
+              <p
+                style={{
+                  marginTop: 12,
+                  color: cartMessage.includes('thành công') ? 'green' : '#c62828',
+                }}
+              >
+                {cartMessage}
+              </p>
+            )}
         </section>
       </div>
     </main>
+  );
+}
+
+export default function ProductDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div style={{ padding: '40px', textAlign: 'center' }}>
+          Đang tải thông tin sản phẩm...
+        </div>
+      }
+    >
+      <ProductDetailContent />
+    </Suspense>
   );
 }
