@@ -335,6 +335,8 @@ export default function CheckoutPage() {
   const [recipientPhone, setRecipientPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [note, setNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'EWALLET' | 'BANK_CARD'>('COD');
+  const [simulateFailure, setSimulateFailure] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -415,7 +417,7 @@ export default function CheckoutPage() {
           recipientPhone: recipientPhone.trim(),
           deliveryAddress: deliveryAddress.trim(),
           note: note.trim() || undefined,
-          paymentMethod: 'COD',
+          paymentMethod,
         }),
       });
 
@@ -425,18 +427,45 @@ export default function CheckoutPage() {
         const message = Array.isArray(data.message)
           ? data.message.join(', ')
           : data.message || 'Đặt hàng thất bại.';
-
         throw new Error(message);
       }
 
       const result = data as OrderResponse;
 
-      setOrder(result.order);
-      setCart({
-        userId,
-        items: [],
-        total: 0,
-      });
+      if (paymentMethod === 'COD') {
+        setOrder(result.order);
+        setCart({ userId, items: [], total: 0 });
+      } else {
+        const paymentResponse = await fetch(`${API_URL}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: result.order.id,
+            paymentMethod,
+            simulateFailure,
+          }),
+        });
+        const paymentData = await paymentResponse.json();
+
+        if (!paymentResponse.ok) {
+          throw new Error(
+            typeof paymentData.message === 'string'
+              ? paymentData.message
+              : 'Không thể xử lý thanh toán.',
+          );
+        }
+
+        if (!paymentData.success) {
+          setError(
+            paymentData.message ||
+              'Thanh toán thất bại. Giỏ hàng của bạn vẫn được giữ nguyên.',
+          );
+          return;
+        }
+
+        setOrder({ ...result.order, status: paymentData.status || 'PAID' });
+        setCart({ userId, items: [], total: 0 });
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -614,26 +643,41 @@ export default function CheckoutPage() {
                   Phương thức thanh toán
                 </h3>
 
-                <label style={styles.paymentLabel}>
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="COD"
-                    checked
-                    readOnly
-                    style={{ marginTop: '4px', accentColor: colors.brown }}
-                  />
+                {([
+                  ['COD', 'Thanh toán khi nhận hàng (COD)', 'Thanh toán trực tiếp khi nhận đồ uống.'],
+                  ['EWALLET', 'Ví điện tử', 'Thanh toán mô phỏng bằng ví điện tử.'],
+                  ['BANK_CARD', 'Thẻ ngân hàng', 'Thanh toán mô phỏng bằng thẻ ngân hàng.'],
+                ] as const).map(([value, title, description]) => (
+                  <label
+                    key={value}
+                    style={{ ...styles.paymentLabel, marginBottom: '14px', cursor: 'pointer' }}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value={value}
+                      checked={paymentMethod === value}
+                      onChange={() => setPaymentMethod(value)}
+                      style={{ marginTop: '4px', accentColor: colors.brown }}
+                    />
+                    <span>
+                      <strong style={styles.paymentTitle}>{title}</strong>
+                      <small style={styles.mutedText}>{description}</small>
+                    </span>
+                  </label>
+                ))}
 
-                  <span>
-                    <strong style={styles.paymentTitle}>
-                      Thanh toán khi nhận hàng (COD)
-                    </strong>
-
-                    <small style={styles.mutedText}>
-                      Thanh toán trực tiếp khi nhận đồ uống.
-                    </small>
-                  </span>
-                </label>
+                {paymentMethod !== 'COD' && (
+                  <label style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '8px', fontSize: '12px', color: colors.muted }}>
+                    <input
+                      type="checkbox"
+                      checked={simulateFailure}
+                      onChange={(event) => setSimulateFailure(event.target.checked)}
+                      style={{ marginTop: '2px', accentColor: colors.brown }}
+                    />
+                    Mô phỏng thanh toán thất bại (dùng để kiểm thử Task 8)
+                  </label>
+                )}
               </div>
 
               <button
@@ -651,7 +695,7 @@ export default function CheckoutPage() {
                   submitting || !cart || cart.items.length === 0
                 }
               >
-                {submitting ? 'Đang xử lý...' : 'Xác nhận đặt hàng'}
+                {submitting ? 'Đang xử lý...' : paymentMethod === 'COD' ? 'Xác nhận đặt hàng' : 'Đặt hàng và thanh toán'}
               </button>
             </form>
           </section>
