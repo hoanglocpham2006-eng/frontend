@@ -84,6 +84,29 @@ export default function Home() {
               <UserIcon />
             </Link>
 
+            <Link
+                href="/orders"
+                title="Lịch sử đơn hàng"
+                aria-label="Xem lịch sử đơn hàng"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  padding: '10px 12px',
+                  border: '1px solid #e5d5c5',
+                  borderRadius: 10,
+                  background: '#fff',
+                  color: '#68472e',
+                  textDecoration: 'none',
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                <span aria-hidden="true">📋</span>
+                <span>Lịch sử</span>
+            </Link>
+
             <Link href="/cart" className="icon-link" aria-label="Giỏ hàng"
               title="Giỏ hàng">
               <CartIcon />
